@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { getInfo, getStreamUrl, downloadToTemp, isValidYouTubeUrl } from '../services/ytdlp.js';
+import { getInfo, getStreamUrl, downloadToTemp, isValidYouTubeUrl, setCookies, hasCookies } from '../services/ytdlp.js';
 
 const router = Router();
 
@@ -57,6 +57,24 @@ router.get('/download', async (req, res) => {
     if (filePath && fs.existsSync(filePath)) fs.unlink(filePath, () => {});
     console.error('GET /api/download', err);
     res.status(500).json({ error: err.message || 'Download failed' });
+  }
+});
+
+router.get('/cookies/status', (req, res) => {
+  res.json({ hasCookies: hasCookies() });
+});
+
+router.post('/cookies', (req, res) => {
+  try {
+    const { cookies } = req.body;
+    if (!cookies || typeof cookies !== 'string' || !cookies.trim()) {
+      return res.status(400).json({ error: 'Cookie text is required' });
+    }
+    setCookies(cookies.trim());
+    res.json({ success: true });
+  } catch (err) {
+    console.error('POST /api/cookies', err);
+    res.status(500).json({ error: 'Failed to save cookies' });
   }
 });
 

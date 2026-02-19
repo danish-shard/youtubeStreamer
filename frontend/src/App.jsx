@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getInfo, getStreamUrls } from './api/client.js';
+import { getInfo, getStreamUrls, getCookieStatus, submitCookies } from './api/client.js';
 import UrlInput from './components/UrlInput.jsx';
 import Player from './components/Player.jsx';
 import AudioToggle from './components/AudioToggle.jsx';
 import DownloadButton from './components/DownloadButton.jsx';
+import CookieInput from './components/CookieInput.jsx';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -12,6 +13,11 @@ export default function App() {
   const [streamData, setStreamData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [cookiesActive, setCookiesActive] = useState(false);
+
+  useEffect(() => {
+    getCookieStatus().then(({ hasCookies }) => setCookiesActive(hasCookies));
+  }, []);
 
   const fetchStream = useCallback(async (targetUrl, isAudioOnly) => {
     if (!targetUrl) {
@@ -53,6 +59,13 @@ export default function App() {
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>YouTube Tool</h1>
+      <CookieInput
+        hasCookies={cookiesActive}
+        onSubmit={async (text) => {
+          await submitCookies(text);
+          setCookiesActive(true);
+        }}
+      />
       <UrlInput onLoad={handleLoad} loading={loading} />
       {error && (
         <p style={{ color: '#e66', marginBottom: '1rem' }}>{error}</p>

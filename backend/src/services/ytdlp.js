@@ -9,27 +9,35 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const YOUTUBE_REGEX = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/i;
 
-/**
- * Validate that URL is a YouTube URL.
- * @param {string} url
- * @returns {boolean}
- */
+const COOKIES_PATH = path.join(__dirname, '../../cookies.txt');
+
+// Seed cookies from base64 env var on startup if provided.
+if (process.env.COOKIES_BASE64) {
+  fs.writeFileSync(COOKIES_PATH, Buffer.from(process.env.COOKIES_BASE64, 'base64').toString('utf-8'));
+  console.log('Cookies file written from COOKIES_BASE64 env var');
+}
+
+function cookiesFlag() {
+  return fs.existsSync(COOKIES_PATH) ? `--cookies "${COOKIES_PATH}"` : '';
+}
+
+export function hasCookies() {
+  return fs.existsSync(COOKIES_PATH);
+}
+
+export function setCookies(cookieText) {
+  fs.writeFileSync(COOKIES_PATH, cookieText, 'utf-8');
+}
+
 export function isValidYouTubeUrl(url) {
   if (!url || typeof url !== 'string') return false;
   return YOUTUBE_REGEX.test(url.trim());
 }
 
-/**
- * Get video metadata (title, thumbnail) via yt-dlp.
- * Uses --print to fetch only the fields we need instead of --dump-json,
- * which produces multi-MB output that easily exceeds Node's exec buffer.
- * @param {string} url - YouTube URL
- * @returns {Promise<{ title: string, thumbnail: string }>}
- */
 export async function getInfo(url) {
   const u = url.trim();
   const { stdout } = await execAsync(
-    `yt-dlp --no-download --no-warnings --no-playlist --print "%(title)s\n%(thumbnail)s" "${u}"`,
+    `yt-dlp --no-download --no-warnings --no-playlist ${cookiesFlag()} --print "%(title)s\n%(thumbnail)s" "${u}"`,
     { maxBuffer: 1024 * 1024, timeout: 30000 }
   );
   const lines = stdout.trim().split('\n');
@@ -39,27 +47,20 @@ export async function getInfo(url) {
   };
 }
 
-/**
- * Get direct stream URL(s) for playback.
- * For video: returns { videoUrl, audioUrl } since YouTube serves them as separate DASH streams.
- * For audio: returns { audioUrl }.
- * @param {string} url - YouTube URL
- * @param {boolean} audioOnly
- * @returns {Promise<{ videoUrl?: string, audioUrl: string }>}
- */
 export async function getStreamUrl(url, audioOnly = false) {
   const u = url.trim();
+  const cf = cookiesFlag();
 
   if (audioOnly) {
     const { stdout } = await execAsync(
-      `yt-dlp -g -f "bestaudio[ext=m4a]/bestaudio" --no-playlist --no-warnings "${u}"`,
+      `yt-dlp -g -f "bestaudio[ext=m4a]/bestaudio" --no-playlist --no-warnings ${cf} "${u}"`,
       { maxBuffer: 2 * 1024 * 1024, timeout: 30000 }
     );
     return { audioUrl: stdout.trim().split('\n')[0] };
   }
 
   const { stdout } = await execAsync(
-    `yt-dlp -g -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b" --no-playlist --no-warnings "${u}"`,
+    `yt-dlp -g -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b" --no-playlist --no-warnings ${cf} "${u}"`,
     { maxBuffer: 2 * 1024 * 1024, timeout: 30000 }
   );
   const lines = stdout.trim().split('\n');
@@ -69,20 +70,15 @@ export async function getStreamUrl(url, audioOnly = false) {
   return { videoUrl: lines[0], audioUrl: lines[0] };
 }
 
-/**
- * Download to a temp file and return path. Caller should unlink when done.
- * @param {string} url - YouTube URL
- * @param {boolean} audioOnly - If true, download best audio and convert to mp3 if needed
- * @returns {Promise<{ filePath: string, title: string }>}
- */
 export async function downloadToTemp(url, audioOnly = false) {
   const u = url.trim();
+  const cf = cookiesFlag();
   const tmpDir = path.join(__dirname, '../../tmp');
   if (!fs.existsSync(tmpDir)) {
     fs.mkdirSync(tmpDir, { recursive: true });
   }
   const { stdout: idOut } = await execAsync(
-    `yt-dlp --no-playlist --print id "${u}"`,
+    `yt-dlp --no-playlist ${cf} --print id "${u}"`,
     { maxBuffer: 1024, timeout: 30000 }
   );
   const id = idOut.trim();
@@ -91,12 +87,12 @@ export async function downloadToTemp(url, audioOnly = false) {
 
   if (audioOnly) {
     await execAsync(
-      `yt-dlp --no-playlist -x --audio-format mp3 -f bestaudio -o "${outTemplate}" "${u}"`,
+      `yt-dlp --no-playlist ${cf} -x --audio-format mp3 -f bestaudio -o "${outTemplate}" "${u}"`,
       { maxBuffer: 10 * 1024 * 1024, timeout: 120000 }
     );
   } else {
     await execAsync(
-      `yt-dlp --no-playlist -o "${outTemplate}" -f b "${u}"`,
+      `yt-dlp --no-playlist ${cf} -o "${outTemplate}" -f b "${u}"`,
       { maxBuffer: 10 * 1024 * 1024, timeout: 120000 }
     );
   }
@@ -109,7 +105,7 @@ export async function downloadToTemp(url, audioOnly = false) {
       })();
 
   const { stdout: titleOut } = await execAsync(
-    `yt-dlp --no-playlist --print title "${u}"`,
+    `yt-dlp --no-playlist ${cf} --print title "${u}"`,
     { maxBuffer: 4096, timeout: 30000 }
   );
   const title = titleOut.trim().replace(/[<>:"/\\|?*]/g, '_').slice(0, 200) || 'video';

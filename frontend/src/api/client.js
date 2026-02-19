@@ -4,6 +4,25 @@ function qs(params) {
   return new URLSearchParams(params).toString();
 }
 
+export async function getCookieStatus() {
+  const res = await fetch(`${API_BASE}/api/cookies/status`);
+  if (!res.ok) return { hasCookies: false };
+  return res.json();
+}
+
+export async function submitCookies(cookies) {
+  const res = await fetch(`${API_BASE}/api/cookies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cookies }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to save cookies');
+  }
+  return res.json();
+}
+
 export async function getInfo(url) {
   const res = await fetch(`${API_BASE}/api/info`, {
     method: 'POST',
