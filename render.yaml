@@ -1,0 +1,28 @@
+services:
+  # Backend — Docker-based (needs yt-dlp + ffmpeg)
+  - type: web
+    name: youtube-tool-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: FRONTEND_ORIGIN
+        sync: false  # Set this manually after frontend deploys
+
+  # Frontend — Static site (Vite build)
+  - type: web
+    name: youtube-tool-web
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    plan: free
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+    envVars:
+      - key: VITE_API_URL
+        sync: false  # Set this manually after backend deploys

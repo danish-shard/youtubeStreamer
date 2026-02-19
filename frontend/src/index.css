@@ -1,0 +1,25 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #1a1a1a;
+  color: #eee;
+  min-height: 100vh;
+}
+
+#root {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+input, button {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
